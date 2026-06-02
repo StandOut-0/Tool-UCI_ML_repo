@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  streamlit:
+    build: .
+    container_name: uci-ml-explorer
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./cache:/app/cache
+    environment:
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_ENABLECORS=false
+    restart: unless-stopped
