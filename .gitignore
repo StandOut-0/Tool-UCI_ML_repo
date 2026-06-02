@@ -5,6 +5,7 @@ data/
 cache/
 .env
 .pytest_cache/
+.streamlit/secrets.toml
 # Python
 __pycache__/
 *.py[cod]
