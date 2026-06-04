@@ -31,32 +31,27 @@ def get_csv_download(df: pd.DataFrame) -> bytes:
 
 def render_export_options(filtered_df):
     """CSV 내보내기 옵션"""
-    st.subheader("📥 데이터 내보내기")
+    export_type = st.selectbox(
+        "📥 내보내기 유형",
+        ["전체 데이터셋", "필터링된 데이터셋"],
+        label_visibility="collapsed"
+    )
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # 전체 데이터 내보내기
+    if export_type == "전체 데이터셋":
         df = load_data()
-        csv_all = get_csv_download(df)
-        st.download_button(
-            label="📊 전체 데이터셋 (CSV)",
-            data=csv_all,
-            file_name=f"uci_ml_datasets_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
+        csv_data = get_csv_download(df)
+        file_name = f"uci_ml_datasets_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    else:
+        csv_data = get_csv_download(filtered_df)
+        file_name = f"uci_ml_filtered_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     
-    with col2:
-        # 필터링된 데이터 내보내기
-        csv_filtered = get_csv_download(filtered_df)
-        st.download_button(
-            label="🔍 필터링된 데이터셋 (CSV)",
-            data=csv_filtered,
-            file_name=f"uci_ml_filtered_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
+    st.download_button(
+        label="� CSV 다운로드",
+        data=csv_data,
+        file_name=file_name,
+        mime="text/csv",
+        use_container_width=True
+    )
 
 
 def render_dataset_card(dataset_row, fav_mgr, col):
@@ -64,18 +59,16 @@ def render_dataset_card(dataset_row, fav_mgr, col):
     with col:
         with st.container(border=True):
             st.markdown(f"### {dataset_row['title']}")
-            st.caption(f"📝 {dataset_row.get('tasks', 'N/A')}")
-            
-            # 메트릭
-            c1, c2, c3 = st.columns(3)
-            c1.metric("속성", dataset_row.get('attributes', 'N/A'))
-            c2.metric("인스턴스", dataset_row.get('instances', 'N/A'))
-            c3.metric("특성", dataset_row.get('features', 'N/A'))
             
             # 링크
             url = dataset_row.get('url', '')
             if validate_url(url):
                 st.markdown(f"[🔗 데이터셋 보기]({url})")
+            
+            # Python import 코드
+            python_code = dataset_row.get('python_import', '')
+            if python_code:
+                st.code(python_code, language='python')
             
             # 선택 버튼
             if st.button("상세 보기", key=f"select_{dataset_row['title']}"):
@@ -83,16 +76,51 @@ def render_dataset_card(dataset_row, fav_mgr, col):
                 st.rerun()
 
 
-def render_table_view(filtered_df):
-    """테이블 뷰 렌더링"""
-    st.dataframe(
-        filtered_df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            'url': st.column_config.LinkColumn('데이터셋 링크'),
-        }
-    )
+def render_table_view(filtered_df, page_size: int = 20):
+    """테이블 뷰 렌더링 with pagination"""
+    if filtered_df.empty:
+        st.info("검색 결과가 없습니다.")
+        return
+    
+    # Pagination
+    total_items = len(filtered_df)
+    total_pages = (total_items + page_size - 1) // page_size
+    
+    if 'page' not in st.session_state:
+        st.session_state.page = 1
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col1:
+        if st.button("◀ 이전", disabled=st.session_state.page == 1):
+            st.session_state.page -= 1
+            st.rerun()
+    with col2:
+        st.write(f"페이지 {st.session_state.page} / {total_pages} (총 {total_items}개)")
+    with col3:
+        if st.button("다음 ▶", disabled=st.session_state.page == total_pages):
+            st.session_state.page += 1
+            st.rerun()
+    
+    # Get current page data
+    start_idx = (st.session_state.page - 1) * page_size
+    end_idx = start_idx + page_size
+    page_data = filtered_df.iloc[start_idx:end_idx].copy()
+    
+    # Display each dataset as a row with custom layout
+    for idx, row in page_data.iterrows():
+        with st.container(border=True):
+            col1, col2, col3 = st.columns([3, 1, 2])
+            
+            with col1:
+                st.write(f"**{row['title']}**")
+            
+            with col2:
+                url = row['url']
+                st.markdown(f"[🔗 링크]({url} 'UCI 데이터셋 페이지로 이동')")
+            
+            with col3:
+                python_code = row['python_import']
+                st.code(python_code, language='python')
 
 
 def render_cards_view(filtered_df, fav_mgr):
@@ -118,7 +146,7 @@ def main():
 
     # 사이드바
     with st.sidebar:
-        st.header("⚙️ 필터 & 제어")
+        st.header("⚙️ 제어")
         
         # 새로고침
         if st.button("🔄 실시간 크롤링", use_container_width=True):
@@ -127,21 +155,6 @@ def main():
                 load_data.clear()
                 st.success("데이터셋이 업데이트되었습니다!")
                 st.rerun()
-        
-        st.divider()
-        
-        # 검색
-        search = st.text_input(
-            "🔎 검색",
-            placeholder="데이터셋 이름 또는 작업 유형으로 검색"
-        )
-        
-        # 필터
-        df = load_data()
-        task_types = ["모두"] + get_task_types(df)
-        task = st.selectbox("📊 작업 유형", task_types)
-        
-        min_instances = st.slider("📈 최소 인스턴스 수", 0, 10000, 0, 100)
         
         st.divider()
         
@@ -156,14 +169,24 @@ def main():
         else:
             st.caption("즐겨찾기가 없습니다.")
 
-    # 필터 적용
-    task_filter = None if task == "모두" else task
-    filtered = filter_datasets(df, search_keyword=search, min_instances=min_instances, task_filter=task_filter)
+    # 데이터 로드
+    df = load_data()
 
     # 탭 메뉴
     tab1, tab2, tab3, tab4 = st.tabs(["🏠 홈", "⭐ 즐겨찾기", "📈 통계", "ℹ️ 정보"])
 
     with tab1:
+        # 검색 박스
+        search = st.text_input(
+            "🔎 데이터셋 검색",
+            placeholder="데이터셋 이름으로 검색",
+            value=st.session_state.get('search', '')
+        )
+        st.session_state.search = search
+        
+        # 필터 적용
+        filtered = filter_datasets(df, search_keyword=search)
+        
         # 뷰 모드 선택
         col_view = st.columns([3, 1])[1]
         with col_view:
@@ -173,14 +196,10 @@ def main():
 
         # 통계
         stats = get_dataset_statistics(filtered)
-        stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
+        stat_col1, stat_col2 = st.columns(2)
         with stat_col1:
             st.metric("📌 데이터셋 수", stats.get("total_datasets", 0))
         with stat_col2:
-            st.metric("📊 총 인스턴스", f"{stats.get('total_instances', 0):,}")
-        with stat_col3:
-            st.metric("🔢 총 속성", stats.get("total_attributes", 0))
-        with stat_col4:
             st.metric("⏰ 마지막 업데이트", stats.get("last_updated", "-"))
 
         st.divider()
@@ -202,22 +221,19 @@ def main():
                 row = filtered[filtered['title'] == selected_title].iloc[0]
                 st.subheader(f"📄 상세 정보: {selected_title}")
                 
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write("**기본 정보**")
-                    st.write(f"- **제목**: {row['title']}")
-                    st.write(f"- **작업**: {row.get('tasks', 'N/A')}")
-                    st.write(f"- **속성**: {row.get('attributes', 'N/A')}")
-                
-                with col2:
-                    st.write("**크기**")
-                    st.write(f"- **인스턴스**: {row.get('instances', 'N/A')}")
-                    st.write(f"- **특성**: {row.get('features', 'N/A')}")
+                st.write("**기본 정보**")
+                st.write(f"- **제목**: {row['title']}")
                 
                 # 링크
                 url = row.get('url', '')
                 if validate_url(url):
-                    st.markdown(f"**🔗 [데이터셋 다운로드]({url})**")
+                    st.markdown(f"**🔗 [데이터셋 보기]({url})**")
+                
+                # Python import 코드
+                python_code = row.get('python_import', '')
+                if python_code:
+                    st.write("**Python Import 코드:**")
+                    st.code(python_code, language='python')
                 
                 # 즐겨찾기 버튼
                 col_fav, col_close = st.columns([1, 3])
@@ -237,7 +253,7 @@ def main():
                         st.rerun()
 
     with tab2:
-        st.subheader("⭐ 즐겨찾기 데이터셋")
+        st.markdown("### ⭐ 즐겨찾기 데이터셋")
         
         if not favorites:
             st.info("즐겨찾기된 데이터셋이 없습니다.")
@@ -264,31 +280,14 @@ def main():
         
         stats = get_dataset_statistics(df)
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
             st.metric("📌 전체 데이터셋", stats.get("total_datasets", 0))
         with col2:
-            st.metric("📊 총 인스턴스", f"{stats.get('total_instances', 0):,}")
-        with col3:
-            st.metric("🔢 총 속성", stats.get("total_attributes", 0))
-        
-        st.divider()
-        
-        # 작업 유형별 분포
-        st.subheader("작업 유형별 분포")
-        task_dist = stats.get('task_distribution', {})
-        if task_dist:
-            task_df = pd.DataFrame(
-                list(task_dist.items()),
-                columns=['작업 유형', '개수']
-            ).sort_values('개수', ascending=False)
-            st.bar_chart(task_df.set_index('작업 유형'))
-            st.dataframe(task_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("작업 유형별 통계 데이터 없음")
+            st.metric("⏰ 마지막 업데이트", stats.get("last_updated", "-"))
 
     with tab4:
-        st.subheader("ℹ️ 프로젝트 정보")
+        st.markdown("### ℹ️ 프로젝트 정보")
         
         st.write("""
         ### UCI ML 데이터셋 탐색기
