@@ -66,9 +66,7 @@ class FavoritesManager:
 
 def filter_datasets(
     df: pd.DataFrame,
-    search_keyword: Optional[str] = None,
-    min_instances: Optional[int] = None,
-    task_filter: Optional[str] = None
+    search_keyword: Optional[str] = None
 ) -> pd.DataFrame:
     """
     데이터셋 필터링
@@ -76,8 +74,6 @@ def filter_datasets(
     Args:
         df: 데이터셋 DataFrame
         search_keyword: 검색 키워드
-        min_instances: 최소 인스턴스 수
-        task_filter: 작업 유형 필터
         
     Returns:
         필터링된 DataFrame
@@ -86,18 +82,8 @@ def filter_datasets(
     
     if search_keyword:
         result = result[
-            result['title'].str.contains(search_keyword, case=False, na=False) |
-            result['tasks'].str.contains(search_keyword, case=False, na=False)
+            result['title'].str.contains(search_keyword, case=False, na=False)
         ]
-    
-    if min_instances:
-        try:
-            result = result[pd.to_numeric(result['instances'], errors='coerce') >= min_instances]
-        except:
-            pass
-    
-    if task_filter and task_filter != "All":
-        result = result[result['tasks'].str.contains(task_filter, case=False, na=False)]
     
     return result.reset_index(drop=True)
 
@@ -114,37 +100,15 @@ def get_dataset_statistics(df: pd.DataFrame) -> Dict:
     """
     stats = {
         'total_datasets': len(df),
-        'total_attributes': 0,
-        'total_instances': 0,
         'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     }
-    
-    try:
-        # 속성 수 합계
-        stats['total_attributes'] = pd.to_numeric(
-            df['attributes'], errors='coerce'
-        ).sum()
-        
-        # 인스턴스 수 합계
-        stats['total_instances'] = pd.to_numeric(
-            df['instances'], errors='coerce'
-        ).sum()
-    except:
-        pass
-    
-    # 작업 유형별 분류
-    try:
-        task_types = df['tasks'].value_counts().to_dict()
-        stats['task_distribution'] = task_types
-    except:
-        stats['task_distribution'] = {}
     
     return stats
 
 
 def get_task_types(df: pd.DataFrame) -> List[str]:
     """
-    고유한 작업 유형 추출
+    고유한 작업 유형 추출 (deprecated)
     
     Args:
         df: 데이터셋 DataFrame
@@ -152,16 +116,7 @@ def get_task_types(df: pd.DataFrame) -> List[str]:
     Returns:
         작업 유형 리스트
     """
-    if 'tasks' not in df.columns:
-        return []
-    
-    task_types = set()
-    for tasks_str in df['tasks'].dropna():
-        # 작업이 쉼표로 구분되어 있을 수 있음
-        tasks = [t.strip() for t in str(tasks_str).split(',')]
-        task_types.update(tasks)
-    
-    return sorted(list(task_types))
+    return []
 
 
 def format_number(num) -> str:

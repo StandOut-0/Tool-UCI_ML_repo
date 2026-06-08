@@ -19,7 +19,7 @@ class UCIMLScraper:
     """UCI ML Repository 크롤러 클래스"""
     
     BASE_URL = "https://archive.ics.uci.edu"
-    DATASETS_URL = f"{BASE_URL}/ml/datasets.php"
+    DATASETS_URL = f"{BASE_URL}/api/datasets/list"
     
     def __init__(self, delay: float = 1.0):
         """
@@ -50,7 +50,7 @@ class UCIMLScraper:
             
             for attempt in range(max_retries):
                 try:
-                    response = self.session.get(self.DATASETS_URL, timeout=10)
+                    response = self.session.get(self.DATASETS_URL, timeout=30)
                     response.raise_for_status()
                     break
                 except requests.RequestException as e:
@@ -60,8 +60,9 @@ class UCIMLScraper:
                     else:
                         raise
             
-            soup = BeautifulSoup(response.content, 'lxml')
-            self.datasets = self._parse_datasets(soup)
+            # Parse JSON response
+            data = response.json()
+            self.datasets = self._parse_datasets(data)
             
             logger.info(f"Successfully fetched {len(self.datasets)} datasets")
             return self.datasets
@@ -70,87 +71,37 @@ class UCIMLScraper:
             logger.error(f"Error fetching datasets: {e}")
             return []
     
-    def _parse_datasets(self, soup: BeautifulSoup) -> List[Dict]:
+    def _parse_datasets(self, data: Dict) -> List[Dict]:
         """
-        HTML에서 데이터셋 정보 파싱
+        JSON 응답에서 데이터셋 정보 파싱
         
         Args:
-            soup: BeautifulSoup 객체
+            data: JSON 응답 데이터
             
         Returns:
             파싱된 데이터셋 리스트
         """
         datasets = []
         
-        # 테이블 찾기: 여러 테이블 중 헤더에 'Name'이 있는 테이블 선택
-        table = None
-        for tbl in soup.find_all('table'):
-            header = tbl.find('tr')
-            if not header:
-                continue
-            header_text = ' '.join([th.get_text(strip=True).lower() for th in header.find_all(['th', 'td'])])
-            if 'name' in header_text:
-                table = tbl
-                break
-
-        if not table:
-            logger.warning("No dataset table found")
+        if not data or 'data' not in data:
+            logger.warning("No datasets found in API response")
             return datasets
-
-        rows = table.find_all('tr')
-        # 헤더 행을 제외
-        if len(rows) > 1:
-            rows = rows[1:]
-        else:
-            rows = []
         
-        for row in rows:
+        for item in data['data']:
             try:
-                cols = row.find_all('td')
-                if len(cols) >= 3:
-                    dataset_info = self._extract_row_info(cols)
-                    datasets.append(dataset_info)
-                    time.sleep(self.delay)
+                dataset_id = item.get('id', '')
+                dataset_name = item.get('name', 'N/A')
+                dataset_info = {
+                    'title': dataset_name,
+                    'url': f"{self.BASE_URL}/dataset/{dataset_id}",
+                    'python_import': f"from ucimlrepo import fetch_ucirepo_id\n{dataset_name.lower().replace(' ', '_').replace('-', '_')} = fetch_ucirepo_id(id={dataset_id})",
+                }
+                datasets.append(dataset_info)
             except Exception as e:
-                logger.warning(f"Error parsing row: {e}")
+                logger.warning(f"Error parsing dataset item: {e}")
                 continue
         
         return datasets
-    
-    def _extract_row_info(self, cols) -> Dict:
-        """
-        테이블 행에서 데이터셋 정보 추출
-        
-        Args:
-            cols: td 엘리먼트 리스트
-            
-        Returns:
-            데이터셋 정보 딕셔너리
-        """
-        try:
-            # 일반적인 UCI ML 테이블 구조
-            title = cols[0].get_text(strip=True) if cols[0] else "N/A"
-            
-            # 링크 추출
-            link_elem = cols[0].find('a')
-            url = link_elem['href'] if link_elem and link_elem.get('href') else "N/A"
-            if url != "N/A" and not url.startswith('http'):
-                url = f"{self.BASE_URL}{url}"
-            
-            # 다른 정보 추출
-            info = {
-                'title': title,
-                'url': url,
-                'attributes': cols[1].get_text(strip=True) if len(cols) > 1 else "N/A",
-                'instances': cols[2].get_text(strip=True) if len(cols) > 2 else "N/A",
-                'features': cols[3].get_text(strip=True) if len(cols) > 3 else "N/A",
-                'tasks': cols[4].get_text(strip=True) if len(cols) > 4 else "N/A",
-            }
-            
-            return info
-        except Exception as e:
-            logger.warning(f"Error extracting row info: {e}")
-            return {}
     
     def to_dataframe(self) -> pd.DataFrame:
         """
@@ -227,19 +178,13 @@ def scrape_uci_datasets(save_path: Optional[str] = None) -> pd.DataFrame:
         sample = [
             {
                 'title': 'Iris',
-                'url': 'https://archive.ics.uci.edu/ml/datasets/Iris',
-                'attributes': 'multivariate',
-                'instances': '150',
-                'features': '4',
-                'tasks': 'classification'
+                'url': 'https://archive.ics.uci.edu/dataset/53/iris',
+                'python_import': 'from ucimlrepo import fetch_ucirepo_id\niris = fetch_ucirepo_id(id=53)'
             },
             {
                 'title': 'Wine',
-                'url': 'https://archive.ics.uci.edu/ml/datasets/Wine',
-                'attributes': 'multivariate',
-                'instances': '178',
-                'features': '13',
-                'tasks': 'classification'
+                'url': 'https://archive.ics.uci.edu/dataset/109/wine',
+                'python_import': 'from ucimlrepo import fetch_ucirepo_id\nwine = fetch_ucirepo_id(id=109)'
             }
         ]
         df = pd.DataFrame(sample)
