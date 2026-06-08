@@ -183,7 +183,7 @@ def main():
             st.caption("즐겨찾기가 없습니다.")
 
     # 탭 메뉴
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏠 홈", "⭐ 즐겨찾기", "🧪 테스트", "📈 통계", "ℹ️ 정보"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🏠 홈", "⭐ 즐겨찾기", "🧪 테스트", "ℹ️ 정보"])
 
     with tab1:
         # 검색 박스
@@ -388,29 +388,6 @@ def main():
                     st.error(f"데이터 로드 중 오류 발생: {e}")
 
     with tab4:
-        st.subheader("📈 데이터셋 통계")
-        
-        stats = get_dataset_statistics(df)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("📌 전체 데이터셋", stats.get("total_datasets", 0))
-        with col2:
-            st.metric("⏰ 마지막 업데이트", stats.get("last_updated", "-"))
-        
-        st.divider()
-        
-        # 데이터셋 이름 길이 분포 그래프
-        st.subheader("데이터셋 이름 길이 분포")
-        df['name_length'] = df['title'].str.len()
-        length_dist = df['name_length'].value_counts().sort_index()
-        
-        if not length_dist.empty:
-            st.bar_chart(length_dist, use_container_width=True)
-        else:
-            st.info("데이터가 없습니다.")
-
-    with tab5:
         st.markdown("### ℹ️ 프로젝트 정보")
         
         st.write("""
