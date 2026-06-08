@@ -130,8 +130,10 @@ def main():
     init_session_state()
     
     # 로고
-    st.logo("assets/images/logo.png", link="https://archive.ics.uci.edu/", icon_image="assets/images/logo.png")
-    
+    # st.logo("assets/images/logo.png", link="https://archive.ics.uci.edu/", icon_image="assets/images/logo.png")
+    st.image("assets/images/logo.png", width=150)
+    st.markdown("[UCI ML Repository](https://archive.ics.uci.edu/)")
+
     # 헤더
     st.title("🔍 S data - UCI ML 데이터셋 탐색기")
     st.markdown("UCI Machine Learning Repository에서 머신러닝 데이터셋을 찾아보세요.")
